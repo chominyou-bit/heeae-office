@@ -358,9 +358,77 @@ body{
 .hint{width:920px;margin-top:7px;text-align:center;font-size:10px;color:#1e2a3a;letter-spacing:.04em;}
 .chat-empty{padding:22px;text-align:center;font-size:11px;color:#2a3a50;line-height:2;}
 .chat-empty em{display:block;font-size:13px;color:#3a4a68;font-style:normal;font-weight:700;margin-bottom:8px;}
+
+/* ── API 키 모달 ── */
+.key-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.75);
+  display:flex;align-items:center;justify-content:center;
+  z-index:9999;backdrop-filter:blur(4px);
+}
+.key-modal{
+  background:#0e1620;border:1px solid #2a3a5a;border-radius:12px;
+  padding:28px 32px;width:420px;
+  box-shadow:0 24px 80px rgba(0,0,0,.8);
+}
+.key-modal h2{font-size:15px;color:#eee;font-weight:700;margin-bottom:6px;}
+.key-modal p{font-size:11px;color:#4a6888;line-height:1.7;margin-bottom:18px;}
+.key-modal a{color:var(--accent);text-decoration:none;}
+.key-modal a:hover{text-decoration:underline;}
+.key-inp{
+  width:100%;background:#090e18;border:1px solid #2a3a5a;
+  border-radius:8px;padding:10px 13px;font-size:12px;color:#a8c8e0;
+  outline:none;font-family:'Noto Sans KR',sans-serif;
+  transition:border-color .15s;margin-bottom:12px;
+}
+.key-inp:focus{border-color:var(--accent);}
+.key-inp::placeholder{color:#2a4060;}
+.key-btn{
+  width:100%;padding:10px;border-radius:8px;border:none;
+  background:var(--accent);color:#fff;font-size:13px;
+  font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;
+  transition:background .15s;
+}
+.key-btn:hover{background:#e67030;}
+.key-note{font-size:10px;color:#2a3a50;text-align:center;margin-top:10px;}
+
+/* 상단 키 상태 표시 */
+.api-status{
+  width:920px;margin-bottom:8px;
+  display:flex;align-items:center;gap:8px;
+  justify-content:flex-end;
+}
+.api-status-dot{width:6px;height:6px;border-radius:50%;}
+.api-status-txt{font-size:10px;color:#3a4a5a;}
+.api-change-btn{
+  font-size:10px;color:#3a4a5a;background:none;border:none;
+  cursor:pointer;padding:2px 6px;border-radius:4px;
+  transition:background .15s,color .15s;
+}
+.api-change-btn:hover{background:rgba(255,255,255,.05);color:#5a6a7a;}
 </style>
 </head>
 <body>
+
+<!-- API 키 모달 -->
+<div class="key-overlay" id="key-overlay" style="display:flex;">
+  <div class="key-modal">
+    <h2>🔑 Anthropic API 키 설정</h2>
+    <p>
+      <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com → API Keys</a>에서<br>
+      키를 생성한 뒤 아래에 붙여넣기 하세요.<br>
+      키는 이 브라우저에만 저장되며 외부로 전송되지 않아요.
+    </p>
+    <input class="key-inp" id="key-inp" type="password" placeholder="sk-ant-api03-..." />
+    <button class="key-btn" onclick="saveKey()">저장하고 시작하기</button>
+    <div class="key-note">키는 이 기기의 localStorage에만 저장됩니다</div>
+  </div>
+</div>
+
+<div class="api-status" id="api-status-bar">
+  <div class="api-status-dot" id="api-dot" style="background:#ef4444;"></div>
+  <span class="api-status-txt" id="api-txt">API 키 없음</span>
+  <button class="api-change-btn" onclick="showKeyModal()">키 설정</button>
+</div>
 
 <div class="title-bar">
   <div class="dot" style="background:#ff8c42;"></div>
@@ -568,11 +636,11 @@ Google Drive 영어책 음원 약 250GB(CD 구매 MP3) 관리.
 업무: 책/챕터별 QR코드 대량 생성, 학생 청취용 링크 배포.
 Google Apps Script 자동화, 음원 파일 구조 정리.`},
 
-  {id:'study',name:'수아',role:'학업관리',
+  {id:'study',name:'연우',role:'학업관리',
    hair:'#1a3020',skin:'#ffd8b0',shirt:'#2858a0',
    deskBg:'#3a5888',mon:'학업',
    pos:{left:'397px',top:'300px'},
-   sp:`너는 학업관리 담당 수아야. 희애님 세 자녀 학습 도우미.
+   sp:`너는 학업관리 담당 연우야. 희애님 세 자녀 학습 도우미.
 자녀: 고1(동안고), 중학생, 초등생.
 고1 주요 과목: 공통수학1, 한국사1.
 시험 일정: 1학기 중간 4/23~4/28.
@@ -759,9 +827,16 @@ async function sendMsg(){
 
   try{
     const apiMsgs = messages.filter(m=>!m.loading).map(m=>({role:m.role, content:m.content}));
+    const apiKey = getApiKey();
+    if(!apiKey){ messages=messages.filter(m=>!m.loading); messages.push({role:'assistant',content:'API 키가 설정되지 않았어요. 상단의 "키 설정" 버튼을 눌러주세요.'}); loading=false; charAnim(activeEmp.id,'idle'); renderChat(); return; }
     const res = await fetch('https://api.anthropic.com/v1/messages',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
       body: JSON.stringify({
         model:'claude-sonnet-4-6',
         max_tokens:1000,
@@ -784,11 +859,45 @@ async function sendMsg(){
   renderChat();
 }
 
+/* ───────────────────────────────────────────
+   API 키 관리
+─────────────────────────────────────────── */
+const KEY_STORAGE = 'heeae-office-apikey';
+function getApiKey(){ return localStorage.getItem(KEY_STORAGE)||''; }
+function saveKey(){
+  const val = document.getElementById('key-inp')?.value.trim();
+  if(!val||!val.startsWith('sk-')){ alert('올바른 API 키를 입력해주세요 (sk- 로 시작)'); return; }
+  localStorage.setItem(KEY_STORAGE, val);
+  document.getElementById('key-overlay').style.display='none';
+  updateApiStatus();
+}
+function showKeyModal(){
+  const inp = document.getElementById('key-inp');
+  if(inp) inp.value = getApiKey();
+  document.getElementById('key-overlay').style.display='flex';
+  setTimeout(()=>inp?.focus(),100);
+}
+function updateApiStatus(){
+  const k = getApiKey();
+  const dot=document.getElementById('api-dot');
+  const txt=document.getElementById('api-txt');
+  const btn=document.querySelector('.api-change-btn');
+  if(k){ dot.style.background='#4ade80'; txt.textContent='API 연결됨'; if(btn) btn.textContent='키 변경'; }
+  else { dot.style.background='#ef4444'; txt.textContent='API 키 없음'; if(btn) btn.textContent='키 설정'; }
+}
+
 /* ── 초기화 ── */
 loadMemos();
 buildDesks();
 updateTags();
 renderChat();
+updateApiStatus();
+// 키 없으면 모달 표시, 있으면 숨김
+if(getApiKey()){
+  document.getElementById('key-overlay').style.display='none';
+} else {
+  document.getElementById('key-overlay').style.display='flex';
+}
 </script>
 </body>
 </html>
